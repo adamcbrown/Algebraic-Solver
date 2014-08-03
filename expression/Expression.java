@@ -1,5 +1,7 @@
 package io.github.adamcbrown1997.algebraicSolver.expression;
 
+import java.util.ArrayList;
+
 public class Expression {
 	
 	private enum ExpressionType{
@@ -16,7 +18,7 @@ public class Expression {
 	
 	private String function;
 	
-	private double number;
+	private double numbers[];
 	
 	public Expression(String expression){
 		type=ExpressionType.STRING;
@@ -36,12 +38,12 @@ public class Expression {
 		this.e1=e1;
 	}
 	
-	public Expression(double number){
+	public Expression(double[] numbers){
 		type=ExpressionType.NUMBER;
-		this.number=number;
+		this.numbers=numbers;
 	}
 	
-	public double solve() throws Exception{
+	public double[] solve() throws Exception{
 		switch(type){
 		case STRING:
 			for(int i=0;i<expression.length();i++){
@@ -99,11 +101,35 @@ public class Expression {
 				}
 			}
 			
+			if(expression.contains("~")){
+				double[] ans1=new Expression(expression.replace('~', '+')).solve();
+				double[] ans2=new Expression(expression.replace('~', '-')).solve();
+				
+				ArrayList<Double> answers=new ArrayList<Double>();
+				for(int i=0;i<ans1.length;i++){
+					if(!answers.contains(ans1[i])){
+						answers.add(ans1[i]);
+					}
+				}
+				
+				for(int i=0;i<ans2.length;i++){
+					if(!answers.contains(ans2[i])){
+						answers.add(ans2[i]);
+					}
+				}
+				
+				double[] ret=new double[answers.size()];
+				for(int i=0;i<answers.size();i++){
+					ret[i]=answers.get(i);
+				}
+				return ret;
+			}
+			
 			if(EquationUtilities.countedCharacters(expression, '(')!=EquationUtilities.countedCharacters(expression, ')')){
 				throw new Exception("Number of open parentheses does not equal the number of close parentheses");
 			}
 			try{
-				return Double.parseDouble(expression);//First try to simply parse the number
+				return new double[]{Double.parseDouble(expression)};//First try to simply parse the number
 			}catch(NumberFormatException e){
 				if(expression.contains("(")){
 					int depth=0;
@@ -131,7 +157,7 @@ public class Expression {
 								}
 								
 								
-								double funcValue = new Expression(expression.substring(0, openParen), new Expression(expression.substring(openParen,closeParen+1))).solve();
+								double[] funcValue = new Expression(expression.substring(0, openParen), new Expression(expression.substring(openParen,closeParen+1))).solve();
 								if(closeParen==expression.length()-1){
 									return funcValue;
 								}else{
@@ -181,33 +207,81 @@ public class Expression {
 			}
 			break;
 		case EXPRESSIONS:
-			switch(symbol){
-			case '+':
-				return e1.solve()+e2.solve();
-			case '-':
-				return e1.solve()-e2.solve();
-			case '*':
-				return e1.solve()*e2.solve();
-			case '/':
-				return e1.solve()/e2.solve();
-			case '^':
-				return Math.pow(e1.solve(), e2.solve());
-			}
-			break;
-		case FUNCTION:
-			if(function.startsWith("log")){
-				if(function.equalsIgnoreCase("log")){
-					return Math.log10(e1.solve());
-				}else{
-					Expression base=new Expression(function.substring(3));
-					return Math.log(e1.solve())/Math.log(base.solve());
+			double[] e1s=e1.solve(), e2s=e2.solve();
+			double[] ret=new double[e1s.length*e2s.length*(symbol=='~'?2:1)];
+			for(int a=0;a<e1s.length;a++){
+				for(int b=0;b<e2s.length;b++){
+					switch(symbol){
+					case '+':
+						ret[a*e2s.length+b]=e1.solve()[a]+e2.solve()[b];
+						break;
+					case '-':
+						ret[a*e2s.length+b]=e1.solve()[a]-e2.solve()[b];
+						break;
+					case '*':
+						ret[a*e2s.length+b]=e1.solve()[a]*e2.solve()[b];
+						break;
+					case '/':
+						ret[a*e2s.length+b]=e1.solve()[a]/e2.solve()[b];
+						break;
+					case '^':
+						ret[a*e2s.length+b]=Math.pow(e1.solve()[a],e2.solve()[b]);
+						break;
+					}
 				}
-			}else if(function.equalsIgnoreCase("ln")){
-				return Math.log(e1.solve());
 			}
-			break;
+			return ret;
+		case FUNCTION:
+			double[] solved=e1.solve();
+			int length=solved.length;
+
+			if(function.startsWith("log")){
+				if(!function.equalsIgnoreCase("log")){
+					length*=new Expression(function.substring(3)).solve().length;
+				}
+			}
+			
+			if(function.equalsIgnoreCase("asin")||function.equalsIgnoreCase("acos")||function.equalsIgnoreCase("atan")){
+				length*=2;
+			}
+			
+			ret=new double[length];
+			
+			for(int i=0;i<solved.length;i++){
+				if(function.startsWith("log")){
+					if(function.equalsIgnoreCase("log")){
+						ret[i]=Math.log10(solved[i]);
+					}else{
+						Expression base=new Expression(function.substring(3));
+						double[] baseSolved=base.solve();
+						for(int i2=0;i2<baseSolved.length;i2++){
+							ret[i+i2*solved.length]= Math.log(solved[i])/Math.log(baseSolved[i2]);
+						}
+					}
+				}else if(function.equalsIgnoreCase("ln")){
+					ret[i]= Math.log(solved[i]);
+				}else if(function.equalsIgnoreCase("sin")){
+					ret[i]= Math.sin(solved[i]);
+				}else if(function.equalsIgnoreCase("cos")){
+					ret[i]= Math.cos(solved[i]);
+				}else if(function.equalsIgnoreCase("tan")){
+					ret[i]= Math.tan(solved[i]);
+				}else if(function.equalsIgnoreCase("asin")){
+					ret[i]= Math.asin(solved[i]);
+					ret[i+solved.length]=Math.PI-Math.asin(solved[i]);
+				}else if(function.equalsIgnoreCase("acos")){
+					ret[i]= Math.acos(solved[i]);
+					ret[i+solved.length]=-Math.acos(solved[i]);
+				}else if(function.equalsIgnoreCase("atan")){
+					ret[i]= Math.atan(solved[i]);
+					ret[i+solved.length]=Math.atan(solved[i])+Math.PI;
+				}else if(function.equalsIgnoreCase("sqrt")){
+					ret[i]=Math.sqrt(solved[i]);
+				}
+			}
+			return ret;
 		case NUMBER:
-			return number;
+			return numbers;
 		default:
 			throw new Exception("Unsupported use of a symbol or function");
 		}
