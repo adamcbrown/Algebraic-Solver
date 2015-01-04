@@ -37,6 +37,28 @@ public class EquationUtilities {
 		}
 	}
 	
+	public static boolean isLowestOp(char op, String expression){
+		int depth=0;
+		for(int i=0;i<expression.length();i++){
+			switch(expression.charAt(i)){
+			case '(':{
+				depth++;
+				break;
+			}
+			case ')':{
+				depth--;
+				break;
+			}
+			}
+			
+			if(isOperation(expression.charAt(i)))
+			if(depth==0&&isOperation(expression.charAt(i))&&isPriorityOp(op, expression.charAt(i))){
+				return false;
+			}
+		}
+		return true;
+	}
+	
 	public static boolean isOperation(char c){
 		for(int i=0;i<OPERATIONS.length;i++){
 			if(OPERATIONS[i]==c){

@@ -1,16 +1,19 @@
 package io.github.adamcbrown1997.algebraicSolver.expression;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class Expression {
 	
 	private enum ExpressionType{
-		STRING, EXPRESSIONS, NUMBER, FUNCTION
+		STRING, EXPRESSIONS, NUMBER, BUILT_IN_FUNCTION
 	}
 	
 	private ExpressionType type;
 	
-	private String expression;
+	protected String expression;
 	
 	private Expression e1;
 	private char symbol;
@@ -19,6 +22,51 @@ public class Expression {
 	private String function;
 	
 	private double numbers[];
+
+	private static List<Function> definedFunctions=new ArrayList<Function>();
+	private static Map<String, Double> definedConstants=new HashMap<String, Double>();
+	
+	public static void initialize(){
+		definedConstants.put("e", Math.E);
+		definedConstants.put("pi", Math.PI);
+	}
+	
+	public static void addFunction(Function function){
+		if(definedFunctions.contains(function)){
+			definedFunctions.remove(function);
+		}
+		definedFunctions.add(function);
+	}
+	
+	public static boolean isADefinedFunction(String head, int params){
+		for(Function f:definedFunctions){
+			if(f.getHead().equalsIgnoreCase(head)&&f.getNumOfParams()==params){
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static boolean isAFunction(String head, int params){
+		return  isADefinedFunction(head, params)||
+				head.startsWith("log")||
+				head.equalsIgnoreCase("ln")||
+				head.startsWith("sin")||
+				head.startsWith("cos")||
+				head.startsWith("tan")||
+				head.startsWith("asin")||
+				head.startsWith("acos")||
+				head.startsWith("atan")||
+				head.startsWith("sqrt");
+	}
+	
+	public static void addConstant(String name, double value){
+		definedConstants.put(name, value);
+	}
+	
+	public static boolean isAConstant(String name){
+		return definedConstants.containsKey(name);
+	}
 	
 	public Expression(String expression){
 		type=ExpressionType.STRING;
@@ -33,7 +81,7 @@ public class Expression {
 	}
 	
 	public Expression(String function, Expression e1){
-		type=ExpressionType.FUNCTION;
+		type=ExpressionType.BUILT_IN_FUNCTION;
 		this.function=function;
 		this.e1=e1;
 	}
@@ -43,25 +91,52 @@ public class Expression {
 		this.numbers=numbers;
 	}
 	
+	/**
+	 * @param expression
+	 * @param location
+	 * @return the name of the constant in the first index and its value in the second, or null if not a constant
+	 */
+	private Object[] getConstantData(String expression, int location){
+		for(String constant:definedConstants.keySet()){
+			if(location+constant.length()<=expression.length()){
+				if(expression.substring(location, location+constant.length()).equalsIgnoreCase(constant) &&
+						(location==0||!EquationUtilities.isLetter(expression.charAt(location-1))) &&
+						(location==expression.length()-constant.length()||!EquationUtilities.isLetter(expression.charAt(location+constant.length())))){
+					return new Object[]{constant, definedConstants.get(constant)};
+				}
+			}
+		}
+		return null;
+	}
+	
 	public double[] solve() throws Exception{
 		switch(type){
 		case STRING:
 			for(int i=0;i<expression.length();i++){
-				if(expression.charAt(i)=='e'&& (i==0||!EquationUtilities.isLetter(expression.charAt(i-1))) && (i==expression.length()-1||!EquationUtilities.isLetter(expression.charAt(i+1)))){
+				Object[] constantData=getConstantData(expression, i);
+				
+				if(constantData!=null){
 					if(i==expression.length()-1){
-						expression=expression.substring(0,i)+Math.E;
+						expression=expression.substring(0,i)+constantData[1];
 					}else{
-						expression=expression.substring(0,i)+Math.E+expression.substring(i+1);
+						expression=expression.substring(0,i)+constantData[1]+expression.substring(i+((String)constantData[0]).length());
 					}
 				}
-
-				if((expression.charAt(i)=='p'&&expression.charAt(i+1)=='i') && (i==0||!EquationUtilities.isLetter(expression.charAt(i-1))) && (i==expression.length()-2||!EquationUtilities.isLetter(expression.charAt(i+2)))){
-					if(i==expression.length()-2){
-						expression=expression.substring(0,i)+Math.PI;
-					}else{
-						expression=expression.substring(0,i)+Math.PI+expression.substring(i+2);
-					}
-				}
+//				if(expression.charAt(i)=='e'&& (i==0||!EquationUtilities.isLetter(expression.charAt(i-1))) && (i==expression.length()-1||!EquationUtilities.isLetter(expression.charAt(i+1)))){
+//					if(i==expression.length()-1){
+//						expression=expression.substring(0,i)+Math.E;
+//					}else{
+//						expression=expression.substring(0,i)+Math.E+expression.substring(i+1);
+//					}
+//				}
+//
+//				if((expression.charAt(i)=='p'&&expression.charAt(i+1)=='i') && (i==0||!EquationUtilities.isLetter(expression.charAt(i-1))) && (i==expression.length()-2||!EquationUtilities.isLetter(expression.charAt(i+2)))){
+//					if(i==expression.length()-2){
+//						expression=expression.substring(0,i)+Math.PI;
+//					}else{
+//						expression=expression.substring(0,i)+Math.PI+expression.substring(i+2);
+//					}
+//				}
 			}
 			
 			for(int i=0;i<expression.length();i++){
@@ -100,10 +175,9 @@ public class Expression {
 					}
 				}
 			}
-			
 			if(expression.contains("~")){
-				double[] ans1=new Expression(expression.replace('~', '+')).solve();
-				double[] ans2=new Expression(expression.replace('~', '-')).solve();
+				double[] ans1=new Expression(expression.replaceFirst("~", "+")).solve();
+				double[] ans2=new Expression(expression.replaceFirst("~", "-")).solve();
 				
 				ArrayList<Double> answers=new ArrayList<Double>();
 				for(int i=0;i<ans1.length;i++){
@@ -128,6 +202,7 @@ public class Expression {
 			if(EquationUtilities.countedCharacters(expression, '(')!=EquationUtilities.countedCharacters(expression, ')')){
 				throw new Exception("Number of open parentheses does not equal the number of close parentheses");
 			}
+			
 			try{
 				return new double[]{Double.parseDouble(expression)};//First try to simply parse the number
 			}catch(NumberFormatException e){
@@ -156,8 +231,22 @@ public class Expression {
 									}
 								}
 								
+								double[] funcValue=null;
+								String[] parametersString=expression.substring(openParen+1,closeParen).split(",");
+								Expression[] parameters=new Expression[parametersString.length];
+								for(int i2=0;i2<parameters.length;i2++){
+									parameters[i2]=new Expression(parametersString[i2]);
+								}
 								
-								double[] funcValue = new Expression(expression.substring(0, openParen), new Expression(expression.substring(openParen,closeParen+1))).solve();
+								if(isADefinedFunction(expression.substring(0, openParen), parameters.length)){
+									for(Function f:definedFunctions){
+										if(f.getHead().equalsIgnoreCase(expression.substring(0, openParen))&&f.getNumOfParams()==parameters.length){
+											funcValue=f.solve(parameters);
+										}
+									}
+								}else{
+									funcValue = new Expression(expression.substring(0, openParen), new Expression(expression.substring(openParen,closeParen+1))).solve();
+								}
 								if(closeParen==expression.length()-1){
 									return funcValue;
 								}else{
@@ -178,28 +267,31 @@ public class Expression {
 						if(expression.charAt(i)==')'){
 							depth--;
 							if(depth==0){
+								
 								if(start==0&&i==expression.length()-1){//Occurs in situations like (5+4), which should reduce to 5+4
 									return new Expression(expression.substring(1, expression.length()-1)).solve();
-								}else if(start==0){
-									return new Expression(new Expression(expression.substring(0, i+1)), expression.charAt(i+1), new Expression(expression.substring(i+2))).solve();
-								}else if(i==expression.length()-1){
-									return new Expression(new Expression(expression.substring(0, start-1)), expression.charAt(start-1), new Expression(expression.substring(start))).solve();
 								}
 								
-								if(EquationUtilities.isPriorityOp(expression.charAt(start-1), expression.charAt(i+1))){
-									return new Expression(new Expression(expression.substring(0, i+1)), expression.charAt(i+1), new Expression(expression.substring(i+2))).solve();
-								}else{
+								if(i!=expression.length()-1&&EquationUtilities.isLowestOp(expression.charAt(i+1), expression)){
 									return new Expression(new Expression(expression.substring(0, start-1)), expression.charAt(start-1), new Expression(expression.substring(start))).solve();
 								}
 							}
 						}
 					}
-				}else{//If there are no parenthesis, then the order of operations should be followed
-					for(char symbol : EquationUtilities.OPERATIONS){
-						if(expression.contains(symbol+"")){
-							int index=expression.indexOf(symbol);
-							Expression e1=new Expression(expression.substring(0, index));
-							Expression e2=new Expression(expression.substring(index+1));
+				}
+				
+				for(char symbol : EquationUtilities.OPERATIONS){
+					int depth=0;
+					for(int i=expression.length()-1;i>=0;i--){
+						if(expression.charAt(i)==')'){
+							depth++;
+						}else if(expression.charAt(i)=='('){
+							depth--;
+						}
+						
+						if(expression.charAt(i)==symbol&&depth==0){
+							Expression e1=new Expression(expression.substring(0, i));
+							Expression e2=new Expression(expression.substring(i+1));
 							return new Expression(e1, symbol, e2).solve();
 						}
 					}
@@ -231,7 +323,7 @@ public class Expression {
 				}
 			}
 			return ret;
-		case FUNCTION:
+		case BUILT_IN_FUNCTION:
 			double[] solved=e1.solve();
 			int length=solved.length;
 
@@ -285,6 +377,26 @@ public class Expression {
 		default:
 			throw new Exception("Unsupported use of a symbol or function");
 		}
+		System.out.println(expression);
 		throw new Exception("UH OH");
+	}
+
+	public double[] evaluate() throws Exception {
+		double[] answers=solve();
+		ArrayList<Double> compressed=new ArrayList<Double>();
+		for(double answer : answers){
+			if(answer!=Double.NaN){
+				if(!compressed.contains(answers)){
+					compressed.add(answer);
+				}
+			}
+		}
+		
+		double[] ret=new double[compressed.size()];
+		for(int i=0;i<compressed.size();i++){
+			ret[i]=compressed.get(i);
+		}
+		
+		return ret;
 	}
 }
